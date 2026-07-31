@@ -1,0 +1,12 @@
+spring:
+  application:
+    name: quartz-tracing-demo
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+
+logging:
+  pattern:
+    console: "%d{yyyy-MM-DD HH:mm:ss.SSS} [%X{traceId:-NoTrace}, %X{spanId:-NoSpan}] %5p --- [%t] %-40.40logger{39} : %m%n"
