@@ -1,9 +1,9 @@
 package com.example.quartz.tracing.demo.service
 
 import com.example.quartz.tracing.demo.quartz.DemoJob
-import com.example.quartz.tracing.demo.quartz.TracedJobBuilder
 import mu.KLogging
 import org.quartz.DateBuilder
+import org.quartz.JobBuilder
 import org.quartz.Scheduler
 import org.quartz.TriggerBuilder
 import org.springframework.stereotype.Component
@@ -21,7 +21,9 @@ class DemoJobScheduler(
 
         logger.info("Scheduling DemoJob with id=$jobId and message=$message")
 
-        val job = TracedJobBuilder.newJob(DemoJob::class.java)
+        // trace-контекст захватывается автоматически: TraceContextSchedulerListener
+        // кладёт его в job data в момент добавления job'а в планировщик
+        val job = JobBuilder.newJob(DemoJob::class.java)
             .withIdentity("demo_job_$jobId")
             .usingJobData(DemoJob.MESSAGE_PARAM_NAME, message)
             .build()
