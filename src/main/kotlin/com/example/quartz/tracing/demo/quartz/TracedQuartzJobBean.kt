@@ -1,13 +1,13 @@
 package com.example.quartz.tracing.demo.quartz
 
+import com.example.quartz.tracing.demo.quartz.QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA
 import org.quartz.JobDataMap
 import org.quartz.JobExecutionContext
 import org.springframework.scheduling.quartz.QuartzJobBean
-import com.example.quartz.tracing.demo.quartz.QuartzTraceContextUtils.TRACE_ID_JOB_DATA
-import com.example.quartz.tracing.demo.quartz.QuartzTraceContextUtils.SPAN_ID_JOB_DATA
 
 /**
- * Базовый класс для Quartz задач, который автоматически восстанавливает trace контекст в MDC.
+ * Базовый класс для Quartz задач, который автоматически восстанавливает trace-контекст
+ * (W3C traceparent из JobDataMap) на время выполнения.
  * Наследники должны реализовать [executeWithTraceContext] вместо [executeInternal].
  */
 abstract class TracedQuartzJobBean : QuartzJobBean() {
@@ -16,10 +16,9 @@ abstract class TracedQuartzJobBean : QuartzJobBean() {
 
     override fun executeInternal(context: JobExecutionContext) {
         val dataMap = context.jobDetail.jobDataMap
-        val traceId = dataMap.getString(TRACE_ID_JOB_DATA)
-        val spanId = dataMap.getString(SPAN_ID_JOB_DATA)
+        val traceContext = dataMap.getString(TRACE_CONTEXT_JOB_DATA)
 
-        val cleanup = QuartzTraceContextUtils.restore(traceId)
+        val cleanup = QuartzTraceContextUtils.restore(traceContext)
 
         try {
             executeWithTraceContext(dataMap)
