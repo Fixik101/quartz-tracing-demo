@@ -20,18 +20,16 @@ repositories {
 }
 
 dependencies {
+    implementation(project(":quartz-tracing-spring-boot-starter"))
+
     implementation("org.springframework.boot:spring-boot-starter")
     implementation("org.springframework.boot:spring-boot-starter-web")
-    implementation("org.springframework.boot:spring-boot-starter-quartz")
-    implementation("org.springframework.boot:spring-boot-micrometer-tracing-brave")
+    implementation("org.springframework.boot:spring-boot-starter-zipkin")
 
     implementation("org.jetbrains.kotlin:kotlin-reflect")
-    implementation("org.quartz-scheduler:quartz")
 
     implementation("org.slf4j:slf4j-api")
     implementation("io.github.microutils:kotlin-logging:2.0.11")
-
-    implementation("io.micrometer:micrometer-tracing-bridge-brave")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")

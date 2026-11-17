@@ -1,4 +1,4 @@
-package com.example.quartz.tracing.demo.quartz
+package com.example.quartz.tracing.starter
 
 import org.quartz.JobDetail
 import org.quartz.Scheduler
@@ -16,15 +16,11 @@ import java.util.Date
  * `scheduleJob`/`addJob` на границе планировщика кладёт trace-контекст в JobDataMap до
  * persist, поэтому вариант одинаково работает для RAM и JDBC хранилищ.
  *
- * Захват делает [QuartzTraceContextUtils.capture]: если активного span'а нет, job data
- * не меняется и job выполнится со своим собственным trace'ом.
  * Все остальные методы делегируются реальному планировщику (делегирование Kotlin).
- *
- * Зарегистрировать обёртку нужно как @Primary-бин типа [Scheduler] (см.
- * [QuartzTraceSchedulerConfiguration]), чтобы планирование из приложения шло через неё.
  */
 class TraceContextCapturingScheduler(
     private val delegate: Scheduler,
+    private val traceContext: QuartzTraceContext,
 ) : Scheduler by delegate {
 
     override fun addJob(jobDetail: JobDetail, replace: Boolean) {
@@ -38,17 +34,17 @@ class TraceContextCapturingScheduler(
     override fun scheduleJob(jobDetail: JobDetail, trigger: Trigger): Date =
         delegate.scheduleJob(jobDetail.attachTraceContext(), trigger)
 
-    override fun scheduleJob(jobDetail: JobDetail, triggers: Set<out Trigger>, replace: Boolean) {
+    override fun scheduleJob(jobDetail: JobDetail, triggers: Set<Trigger>, replace: Boolean) {
         delegate.scheduleJob(jobDetail.attachTraceContext(), triggers, replace)
     }
 
-    override fun scheduleJobs(triggersAndJobs: Map<JobDetail, Set<out Trigger>>, replace: Boolean) {
+    override fun scheduleJobs(triggersAndJobs: Map<JobDetail, Set<Trigger>>, replace: Boolean) {
         triggersAndJobs.keys.forEach { it.attachTraceContext() }
         delegate.scheduleJobs(triggersAndJobs, replace)
     }
 
     private fun JobDetail.attachTraceContext(): JobDetail {
-        jobDataMap.putAll(QuartzTraceContextUtils.capture())
+        jobDataMap.putAll(traceContext.capture())
         return this
     }
 }

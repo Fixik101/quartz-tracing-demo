@@ -1,4 +1,4 @@
-package com.example.quartz.tracing.demo.quartz
+package com.example.quartz.tracing.starter
 
 import io.mockk.every
 import io.mockk.mockk
@@ -25,13 +25,16 @@ import java.util.UUID
 
 class TraceContextCapturingSchedulerTest : TracingTestBase() {
 
+    private val properties = QuartzTracingProperties()
+    private val traceContext by lazy { QuartzTraceContext(tracer, propagator, properties) }
+
     private lateinit var scheduler: Scheduler
     private lateinit var tracedScheduler: TraceContextCapturingScheduler
 
     @BeforeEach
     fun setUpScheduler() {
         scheduler = StdSchedulerFactory().scheduler
-        tracedScheduler = TraceContextCapturingScheduler(scheduler)
+        tracedScheduler = TraceContextCapturingScheduler(scheduler, traceContext)
     }
 
     @AfterEach
@@ -47,14 +50,13 @@ class TraceContextCapturingSchedulerTest : TracingTestBase() {
         val delegatedJob = slot<JobDetail>()
         every { delegate.scheduleJob(capture(delegatedJob), any()) } returns Date()
 
-        val wrapper = TraceContextCapturingScheduler(delegate)
-        runWithSpan { wrapper.scheduleJob(jobDetail, trigger) }
+        val wrapper = TraceContextCapturingScheduler(delegate, traceContext)
+        withParentSpan("schedule") { wrapper.scheduleJob(jobDetail, trigger) }
 
         // делегируется тот же объект, но уже с захваченным контекстом в job data —
         // то есть захват происходит до persist, а не после
         assertSame(jobDetail, delegatedJob.captured)
-        val traceParent = delegatedJob.captured.jobDataMap
-            .getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA)
+        val traceParent = delegatedJob.captured.jobDataMap.getString(properties.jobDataKey)
         assertNotNull(traceParent)
         assertTrue(traceParent!!.startsWith("00-"))
     }
@@ -63,15 +65,15 @@ class TraceContextCapturingSchedulerTest : TracingTestBase() {
     fun `scheduleJob stores captured context with job in RAM job store`() {
         val jobDetail = jobDetail()
 
-        val expectedTraceId = runWithSpan {
-            val traceId = tracing.tracer().currentSpan()!!.context().traceIdString()
+        val expectedTraceId = withParentSpan("schedule") {
+            val traceId = tracer.currentSpan()!!.context().traceId()
             tracedScheduler.scheduleJob(jobDetail, triggerFor(jobDetail))
             traceId
-        }
+        }.second
 
         val stored = scheduler.getJobDetail(jobDetail.key)
         assertNotNull(stored)
-        val traceParent = stored!!.jobDataMap.getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA)
+        val traceParent = stored!!.jobDataMap.getString(properties.jobDataKey)
         assertNotNull(traceParent)
         assertTrue(traceParent!!.contains(expectedTraceId))
     }
@@ -80,16 +82,16 @@ class TraceContextCapturingSchedulerTest : TracingTestBase() {
     fun `addJob stores captured context with job in RAM job store`() {
         val jobDetail = jobDetail()
 
-        val expectedTraceId = runWithSpan {
-            val traceId = tracing.tracer().currentSpan()!!.context().traceIdString()
+        val expectedTraceId = withParentSpan("schedule") {
+            val traceId = tracer.currentSpan()!!.context().traceId()
             tracedScheduler.addJob(jobDetail, true)
             traceId
-        }
+        }.second
 
         val stored = scheduler.getJobDetail(jobDetail.key)
         assertNotNull(stored)
         assertTrue(
-            stored!!.jobDataMap.getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA)!!.contains(expectedTraceId)
+            stored!!.jobDataMap.getString(properties.jobDataKey)!!.contains(expectedTraceId)
         )
     }
 
@@ -102,16 +104,16 @@ class TraceContextCapturingSchedulerTest : TracingTestBase() {
             jobB to setOf(triggerFor(jobB)),
         )
 
-        val expectedTraceId = runWithSpan {
-            val traceId = tracing.tracer().currentSpan()!!.context().traceIdString()
+        val expectedTraceId = withParentSpan("schedule") {
+            val traceId = tracer.currentSpan()!!.context().traceId()
             tracedScheduler.scheduleJobs(jobsAndTriggers, true)
             traceId
-        }
+        }.second
 
         val traceParentA = scheduler.getJobDetail(jobA.key)!!.jobDataMap
-            .getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA)
+            .getString(properties.jobDataKey)
         val traceParentB = scheduler.getJobDetail(jobB.key)!!.jobDataMap
-            .getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA)
+            .getString(properties.jobDataKey)
         assertNotNull(traceParentA)
         assertNotNull(traceParentB)
         assertTrue(traceParentA!!.startsWith("00-") && traceParentA.contains(expectedTraceId))
@@ -126,16 +128,7 @@ class TraceContextCapturingSchedulerTest : TracingTestBase() {
 
         val stored = scheduler.getJobDetail(jobDetail.key)
         assertNotNull(stored)
-        assertNull(stored!!.jobDataMap.getString(QuartzTraceContextUtils.TRACE_CONTEXT_JOB_DATA))
-    }
-
-    private fun <T> runWithSpan(block: () -> T): T {
-        val span = tracing.tracer().nextSpan().name("schedule").start()
-        try {
-            return tracing.tracer().withSpanInScope(span).use { block() }
-        } finally {
-            span.finish()
-        }
+        assertNull(stored!!.jobDataMap.getString(properties.jobDataKey))
     }
 
     private fun jobDetail(): JobDetail {

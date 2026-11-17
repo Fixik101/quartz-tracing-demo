@@ -9,4 +9,8 @@ management:
 
 logging:
   pattern:
-    console: "%d{yyyy-MM-DD HH:mm:ss.SSS} [%X{traceId:-NoTrace}, %X{spanId:-NoSpan}] %5p --- [%t] %-40.40logger{39} : %m%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{traceId:-NoTrace}, %X{spanId:-NoSpan}] %5p --- [%t] %-40.40logger{39} : %m%n"
+
+quartz:
+  tracing:
+    enabled: true

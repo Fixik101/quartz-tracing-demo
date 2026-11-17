@@ -10,10 +10,17 @@ class DemoJob : QuartzJobBean() {
 
     companion object : KLogging() {
         const val MESSAGE_PARAM_NAME = "MESSAGE"
+        const val FAIL_PARAM_NAME = "FAIL"
     }
 
     override fun executeInternal(context: JobExecutionContext) {
         val message = context.jobDetail.jobDataMap[MESSAGE_PARAM_NAME] as String?
-        logger.info("Executing DemoJob with message=$message")
+        val fail = context.jobDetail.jobDataMap[FAIL_PARAM_NAME] as Boolean? ?: false
+
+        logger.info("Executing DemoJob with message=$message, fail=$fail")
+
+        if (fail) {
+            throw IllegalStateException("DemoJob failed on purpose, message=$message")
+        }
     }
 }
